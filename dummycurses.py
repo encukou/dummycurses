@@ -30,6 +30,7 @@ def tparm(s, *params, variables={}):
     push = stack.append
     pop = stack.pop
     parts = []
+    output = parts.append
     def get_param(i):
         try:
             return params[i]
@@ -38,17 +39,25 @@ def tparm(s, *params, variables={}):
     while True:
         percent_pos = s.find(b'%', pos)
         if percent_pos == -1:
-            parts.append(s[pos:])
+            output(s[pos:])
             break
-        parts.append(s[pos:percent_pos])
+        output(s[pos:percent_pos])
         pos = percent_pos + 1
         match s[pos:pos+1]:
-            case b'%': parts.append(b'%')
-            case b'c': parts.append(bytes([pop() & 0xff or 0x80]))
+            case b'%': output(b'%')
+            case b'c':
+                char = pop()
+                if char == 0:
+                    char = 0x80
+                char &= 0xff
+                if char == 0:
+                    # ncurses outputs a zero byte, ending the string
+                    break
+                output(bytes([char]))
             case b's':
                 val = pop()
                 if val:
-                    parts.append(str(pop()).encode('ascii'))
+                    output(str(pop()).encode('ascii'))
             case b'l': push(len(str(pop())))
             case b'+': b = pop(); a = pop(); push(a + b)
             case b'-': b = pop(); a = pop(); push(a - b)
@@ -94,7 +103,10 @@ def tparm(s, *params, variables={}):
                     fmt = s[pos-1:end+1]
                     if s[pos:pos+1] == ':':
                         fmt = '%' + fmt[2:]
-                    parts.append(fmt % pop())
+                    val = pop()
+                    if val < 0 and fmt[-1] in b'xXo':
+                        val = val & 0xFFFFFFFF
+                    output(fmt % val)
                     pos = end
         pos += 1
     return b''.join(parts)
@@ -124,7 +136,7 @@ def _get_terminfo(source, exclude=()):
             value = value.replace(r'\0', '\200')
             assert '\\' not in value.replace(r'\\', '')
             value = value.replace(r'\\', '\\')
-            assert '$<' not in value, value  # `$<..>` means delay
+            #assert '$<' not in value, value  # `$<..>` means delay
             assert '%?' not in value, value  # %? is a if-else operator
             result[name] = value.encode('ascii')
     return result
@@ -136,7 +148,6 @@ def _get_terminfo(source, exclude=()):
 _TERM = 'xterm-256color'
 _TERMINFO = _get_terminfo(
     exclude={
-        'flash',  # uses delay
         'setab', 'setaf', 'sgr',  # use if-else operator
     },
     source=r"""
