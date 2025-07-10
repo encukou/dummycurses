@@ -31,6 +31,8 @@ def tparm(s, *params, variables={}):
     pop = stack.pop
     parts = []
     output = parts.append
+    if_stack = []
+    active = True
     def get_param(i):
         try:
             return params[i]
@@ -39,11 +41,38 @@ def tparm(s, *params, variables={}):
     while True:
         percent_pos = s.find(b'%', pos)
         if percent_pos == -1:
-            output(s[pos:])
+            if active:
+                output(s[pos:])
             break
-        output(s[pos:percent_pos])
+        if active:
+            output(s[pos:percent_pos])
         pos = percent_pos + 1
-        match s[pos:pos+1]:
+        control = s[pos:pos+1]
+        #print(s[:pos], stack, s[pos:], if_stack, b''.join(parts))
+        if control in b'?te;':
+            match control:
+                case b'?':
+                    if_stack.append('cond')
+                case b't':
+                    if active:
+                        val = bool(pop())
+                        if val:
+                            if_stack[-1] = 'then'
+                        else:
+                            if_stack[-1] = 'wait'
+                case b'e':
+                    if if_stack[-1] == 'wait':
+                        if_stack[-1] = 'cond'
+                    if if_stack[-1] == 'then':
+                        if_stack[-1] = 'skip'
+                case b';':
+                    if_stack.pop()
+            pos += 1
+            active = all(e in {'cond', 'then'} for e in if_stack)
+            continue
+        if not active:
+            continue
+        match control:
             case b'%': output(b'%')
             case b'c':
                 char = pop()
@@ -137,7 +166,7 @@ def _get_terminfo(source, exclude=()):
             assert '\\' not in value.replace(r'\\', '')
             value = value.replace(r'\\', '\\')
             #assert '$<' not in value, value  # `$<..>` means delay
-            assert '%?' not in value, value  # %? is a if-else operator
+            #assert '%?' not in value, value  # %? is a if-else operator
             result[name] = value.encode('ascii')
     return result
 
@@ -147,9 +176,7 @@ def _get_terminfo(source, exclude=()):
 # TODO: Implement features for missing capabilities
 _TERM = 'xterm-256color'
 _TERMINFO = _get_terminfo(
-    exclude={
-        'setab', 'setaf', 'sgr',  # use if-else operator
-    },
+    exclude={},
     source=r"""
         am, bce, ccc, km, mc5i, mir, msgr, npc, xenl,
         colors#0x100, cols#80, it#8, lines#24, pairs#0x10000,
