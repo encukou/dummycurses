@@ -92,7 +92,7 @@ def tparm(s, *params, variables={}):
             case b'-': b = pop(); a = pop(); push(a - b)
             case b'*': b = pop(); a = pop(); push(a * b)
             case b'/': b = pop(); a = pop(); push(int(a / b))
-            case b'm': b = pop(); a = pop(); push(a % b)
+            case b'm': b = pop(); a = pop(); push(a - (int(a / b) * b))
             case b'&': b = pop(); a = pop(); push(a & b)
             case b'|': b = pop(); a = pop(); push(a | b)
             case b'^': b = pop(); a = pop(); push(a ^ b)
