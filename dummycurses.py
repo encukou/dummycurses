@@ -141,33 +141,43 @@ def tparm(s, *params, variables={}):
     return b''.join(parts)
 
 def _get_terminfo(source, exclude=()):
+    lines = [l for l in source.splitlines() if not l.startswith('#')]
+    source = ' '.join(lines).strip(' ,')
+    fields = re.split(r',( |$)', source)
+    field_iter = iter(fields)
+    names = next(field_iter)
+
     result = {}
-    for field in source.replace('\n', ' ').strip(' \n,').split(','):
-        name, sep, value = field.strip().partition('=')
-        if name in exclude:
-            continue
-        if sep:
-            value = value.replace(r'^?', '\x7f')
-            value = re.sub(r'\^(.)', lambda m: chr(ord(m[1]) & 0x1f), value)
-            assert '^' not in value.replace(r'\^', ''), value
-            value = value.replace(r'\E', '\x1b')
-            value = value.replace(r'\e', '\x1b')
-            value = value.replace(r'\r', '\r')
-            value = value.replace(r'\n', '\n')
-            value = value.replace(r'\t', '\t')
-            value = value.replace(r'\b', '\b')
-            value = value.replace(r'\f', '\f')
-            value = value.replace(r'\s', ' ')
-            value = re.sub(r'\\([\d]{3})', lambda m: chr(int(m[1], 8)), value)
-            value = value.replace(r'\^', '^')
-            value = value.replace(r'\,', ',')
-            value = value.replace(r'\:', ':')
-            value = value.replace(r'\0', '\200')
-            assert '\\' not in value.replace(r'\\', '')
-            value = value.replace(r'\\', '\\')
-            #assert '$<' not in value, value  # `$<..>` means delay
-            #assert '%?' not in value, value  # %? is a if-else operator
-            result[name] = value.encode('ascii')
+    for field in field_iter:
+        try:
+            name, sep, value = field.strip().partition('=')
+            if name in exclude:
+                continue
+            if sep:
+                value = value.replace(r'^?', '\x7f')
+                value = re.sub(r'(?<!\\)\^(.)', lambda m: chr(ord(m[1]) & 0x1f), value)
+                assert '^' not in value.replace(r'\^', ''), value
+                value = value.replace(r'\E', '\x1b')
+                value = value.replace(r'\e', '\x1b')
+                value = value.replace(r'\r', '\r')
+                value = value.replace(r'\n', '\n')
+                value = value.replace(r'\t', '\t')
+                value = value.replace(r'\b', '\b')
+                value = value.replace(r'\f', '\f')
+                value = value.replace(r'\s', ' ')
+                value = re.sub(r'\\([\d]{3})', lambda m: chr(int(m[1], 8)), value)
+                value = value.replace(r'\^', '^')
+                value = value.replace(r'\,', ',')
+                value = value.replace(r'\:', ':')
+                value = value.replace(r'\0', '\200')
+                assert '\\' not in value.replace(r'\\', ''), value
+                value = value.replace(r'\\', '\\')
+                #assert '$<' not in value, value  # `$<..>` means delay
+                #assert '%?' not in value, value  # %? is a if-else operator
+                result[name] = value.encode('latin1')
+        except Exception as e:
+            e.add_note(field)
+            raise
     return result
 
 # terminfo data obtained with:  infocmp xterm-256color
@@ -178,6 +188,8 @@ _TERM = 'xterm-256color'
 _TERMINFO = _get_terminfo(
     exclude={},
     source=r"""
+#	Reconstructed via infocmp from file: /usr/share/terminfo/x/xterm-256color
+xterm-256color|xterm with 256 colors,
         am, bce, ccc, km, mc5i, mir, msgr, npc, xenl,
         colors#0x100, cols#80, it#8, lines#24, pairs#0x10000,
         acsc=``aaffggiijjkkllmmnnooppqqrrssttuuvvwwxxyyzz{{||}}~~,
